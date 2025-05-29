@@ -1,14 +1,20 @@
-
 {
-  "name": "travelrobot",
+  "name": "telegram-travel-bot",
   "version": "1.0.0",
-  "main": "server.js",
+  "description": "Telegram bot for travel recommendations",
+  "main": "index.js",
   "scripts": {
-    "start": "node server.js"
+    "start": "node index.js",
+    "dev": "node index.js"
   },
   "dependencies": {
     "express": "^4.18.2",
-    "axios": "^1.6.0",
-    "dotenv": "^16.3.1"
-  }
+    "node-fetch": "^2.6.7"
+  },
+  "engines": {
+    "node": ">=14"
+  },
+  "keywords": ["telegram", "bot", "travel", "nodejs"],
+  "author": "Travel Bot",
+  "license": "MIT"
 }
