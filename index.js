@@ -46,7 +46,7 @@ async function handleStartCommand(chatId, firstName) {
 I am your travel bot and ready to help you!
 
 Available commands:
-/…start - Show this message
+/start - Show this message
 /help - Get help
 
 What I can do:
@@ -98,7 +98,7 @@ What specifically interests you about Vietnam?`);
         const responses = [
             `Hello, ${firstName}! You wrote: "${text}". Where are you planning to travel?`,
             `Interesting! Tell me more about your travel plans!`,
-            `Got your message "${text}". Can help with tour selection!$`,
+            `Got your message "${text}". Can help with tour selection!`,
             `Thanks for the message! Looking for information about a country?`,
             `Got it! Where would you like to go for vacation?`
         ];
@@ -136,7 +136,7 @@ async function processUpdate(update) {
     }
 }
 
-a79nc function getUpdates() {
+async function getUpdates() {
     const url = `${TELEGRAM_API_URL}/getUpdates?offset=${lastUpdateId + 1}&timeout=30`;
 
     try {
@@ -155,7 +155,7 @@ a79nc function getUpdates() {
     }
 }
 
-aSync function startPolling() {
+async function startPolling() {
     console.log('Bot started! Starting polling...');
 
     while (true) {
@@ -171,8 +171,8 @@ aSync function startPolling() {
 }
 
 app.get('/', (req, res) => {
-    res.json({ 
-        status: 'OK', 
+    res.json({
+        status: 'OK',
         message: 'Travel Bot is running!', 
         uptime: process.uptime()
     });
