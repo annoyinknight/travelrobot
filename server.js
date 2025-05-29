@@ -1,4 +1,4 @@
-```javascript
+javascript
 const express = require('express');
 const axios = require('axios');
 const app = express();
@@ -218,4 +218,3 @@ app.listen(PORT, () => {
   console.log('Telegram travel bot running on port', PORT);
   console.log('Allowed users:', ALLOWED_USER_IDS.join(', ') || 'None - access denied to all');
 });
-```
