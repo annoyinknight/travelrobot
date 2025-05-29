@@ -137,7 +137,7 @@ async function processUpdate(update) {
 }
 
 async function getUpdates() {
-    const url = `${TELEGRAM_API_URL}/getUpdates?offset=${lastUpdateId + 1}&timeout=30`;
+    const url = ``${TELEGP¡M_API_URL}/getUpdates?offset=${lastUpdateId + 1}&timeout=30`;
 
     try {
         const fetch = require('node-fetch');
