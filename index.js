@@ -6,7 +6,7 @@ const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API_URL = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN;
 
 if (!TELEGRAM_BOT_TOKEN) {
-    console.error("Error: no TELEGRAM_BOT_TOKEN");
+    console.error("Ошибка: нет TELEGRAM_BOT_TOKEN");
     process.exit(1);
 }
 
@@ -32,22 +32,22 @@ async function sendMessage(chatId, text, parseMode = "HTML") {
 
         const result = await response.json();
         if (!result.ok) {
-            console.error("Send error:", result);
+            console.error("Ошибка отправки:", result);
         }
         return result;
     } catch (error) {
-        console.error("Message error:", error);
+        console.error("Ошибка сообщения:", error);
     }
 }
 
 async function handleStartCommand(chatId, firstName) {
-    const welcomeMessage = "Robot Welcome, " + firstName + "!\n\nI am your travel bot and ready to help you!\n\nAvailable commands:\n/start - Show this message\n/help - Get help\n\nWhat I can do:\n- Find tours by country\n- Give travel advice\n- Help with trip planning\n\nTell me where you want to go!";
+    const welcomeMessage = "Привет, " + firstName + "!\n\nЯ ваш туристический бот и готов помочь вам!\n\nДоступные команды:\n/start - Показать это сообщение\n/help - Получить справку\n\nЧто я умею:\n- Найти туры по стране\n- Дать советы по путешествиям\n- Помочь с формированием поездки\n\nСкажите мне куда хотите поехать!";
 
     await sendMessage(chatId, welcomeMessage);
 }
 
 async function handleHelpCommand(chatId) {
-    const helpMessage = "Bot Help\n\nCommands:\n/start - Start bot and show welcome\n/help - Show this help\n\nCapabilities:\n- Respond to any text messages\n- Support commands\n- Ready for expansion\n\nSend me anything and I'll respond!";
+    const helpMessage = "Справка по боту\n\nКоманды:\n/start - Запустить бота и показать приветствие\n/help - Показать эту справку\n\nСпособности:\n- Отвечаю на любые сообщения\n- Поддерживаю команды\n- Готов к расширению\n\nНапишите мне что-нибудь и я отвечу!";
 
     await sendMessage(chatId, helpMessage);
 }
@@ -55,15 +55,15 @@ async function handleHelpCommand(chatId) {
 async function handleTextMessage(chatId, text, firstName) {
     const textLower = text.toLowerCase();
 
-    if (textLower.includes("vietnam")) {
-        await sendMessage(chatId, "Vietnam - great choice!\n\nPopular Vietnam tours:\n\n- Nyachang - beautiful beaches\n- Fuquoc - tropical island\n- Muine - water sports\n\n- Hanoi - capital, old quarter\n- Hoshimin - modern megacity\n\nBest time: November-March\n\nWhat specifically interests you about Vietnam?");
+    if (textLower.includes("vietnam") || textLower.includes("вьетнам") || textLower.includes("вьетнаме")) {
+        await sendMessage(chatId, "Вьетнам - отличный выбор!\n\nПопулярные туры по Вьетнаму:\n\n- Нячанг - красивые пляжи\n- Фукуок - тропический остров\n- Муйне - водный спорт\n\n- Ханой - столица, старый квартал\n- Хошимин - современный мегаполис\n\nЛучшее время: Ноябрь-Март\n\nЧто именно вас интересует во Вьетнаме?");
     } else {
         const responses = [
-            "Hello, " + firstName + "! You wrote: \"" + text + "\". Where are you planning to travel?",
-            "Interesting! Tell me more about your travel plans!",
-            "Got your message \"" + text + "\". Can help with tour selection!",
-            "Thanks for the message! Looking for information about a country?",
-            "Got it! Where would you like to go for vacation?"
+            "Привет, " + firstName + "! Вы написали: \"" + text + "\". Куда планируете путешествовать?",
+            "Интересно! Расскажите больше о своих планах на путешествие!",
+            "Получил ваше сообщение \"" + text + "\". Могу помочь с выбором тура!",
+            "Спасибо за сообщение! Ищете информацию о стране?",
+            "Понял! Куда бы хотели поехать отдыхать?"
         ];
 
         const randomResponse = responses[Math.floor(Math.random() * responses.length)];
@@ -77,9 +77,9 @@ async function processUpdate(update) {
     const message = update.message;
     const chatId = message.chat.id;
     const text = message.text;
-    const firstName = message.from.first_name || "Friend";
+    const firstName = message.from.first_name || "Друг";
 
-    console.log("Message from " + firstName + " (ID: " + chatId + "): " + text);
+    console.log("Сообщение от " + firstName + " (ID: " + chatId + "): " + text);
 
     if (text && text.startsWith("/")) {
         const command = text.split(" ")[0].toLowerCase();
@@ -92,7 +92,7 @@ async function processUpdate(update) {
                 await handleHelpCommand(chatId);
                 break;
             default:
-                await sendMessage(chatId, "Unknown command: " + command + "\n\nUse /help for command list.");
+                await sendMessage(chatId, "Неизвестная команда: " + command + "\n\nИспользуйте /help для списка команд.");
         }
     } else if (text) {
         await handleTextMessage(chatId, text, firstName);
@@ -114,18 +114,18 @@ async function getUpdates() {
             }
         }
     } catch (error) {
-        console.error("Update error:", error);
+        console.error("Ошибка обновления:", error);
     }
 }
 
 async function startPolling() {
-    console.log("Bot started! Starting polling...");
+    console.log("Бот запущен! Начинаем опрос...");
 
     while (true) {
         try {
             await getUpdates();
         } catch (error) {
-            console.error("Main loop error:", error);
+            console.error("Ошибка основного цикла:", error);
             await new Promise(resolve => setTimeout(resolve, 5000));
         }
 
@@ -135,8 +135,8 @@ async function startPolling() {
 
 app.get("/", (req, res) => {
     res.json({
-        status: "OK",
-        message: "Travel Bot is running!", 
+        status: "ОК",
+        message: "Туристический бот работает!", 
         uptime: process.uptime()
     });
 });
@@ -148,6 +148,6 @@ app.post("/webhook", async (req, res) => {
 });
 
 app.listen(PORT, () => {
-    console.log("Server started on port " + PORT);
+    console.log("Сервер запущен на порту " + PORT);
     startPolling();
 });
