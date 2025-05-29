@@ -4,21 +4,21 @@ const PORT = process.env.PORT || 3000;
 
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const DEEPSEEK_API_KEY = "sk-2ecfef4eb45a493197c4091bebf21be2";
-const TELEGRAM_API_URL = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN;
 
 if (!TELEGRAM_BOT_TOKEN) {
-    console.error("Ошибка: нет TELEGRAM_BOT_TOKEN");
+    console.error("❌ Ошибка: TELEGRAM_BOT_TOKEN не задан");
     process.exit(1);
 }
 
-let lastUpdateId = 0;
+const TELEGRAM_API_URL = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN;
 
 app.use(express.json());
 
-// Функция для вызова Deepseek AI
+/**
+ * Запрос к Deepseek AI
+ */
 async function getAIResponse(userMessage, userName) {
     try {
-        const fetch = require("node-fetch");
         const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
             method: "POST",
             headers: {
@@ -33,40 +33,37 @@ async function getAIResponse(userMessage, userName) {
                         content: "Ты туристический бот-помощник. Отвечай на русском языке дружелюбно и информативно. Помогай с выбором туров, планированием поездок и даёшь советы по путешествиям. Если пользователь спрашивает про конкретную страну, дай полезную информацию. Отвечай кратко но содержательно."
                     },
                     {
-                        role: "user", 
-                        content: "Пользователь " + userName + " написал: \"" + userMessage + "\". Ответь ему как туристический бот."
+                        role: "user",
+                        content: `Пользователь ${userName} написал: "${userMessage}". Ответь ему как туристический бот.`
                     }
                 ],
                 max_tokens: 200,
                 temperature: 0.7
             })
         });
-        
+
         const data = await response.json();
-        
-        if (data.choices && data.choices[0] && data.choices[0].message) {
-            return data.choices[0].message.content.trim();
-        }
-        
-        console.error("Неожиданный ответ от Deepseek:", data);
-        return null;
-        
+
+        return data?.choices?.[0]?.message?.content?.trim() || null;
     } catch (error) {
-        console.error("Ошибка Deepseek AI:", error);
+        console.error("❌ Ошибка Deepseek AI:", error);
         return null;
     }
 }
 
+/**
+ * Отправка сообщения в Telegram
+ */
 async function sendMessage(chatId, text, parseMode = "HTML") {
-    const url = TELEGRAM_API_URL + "/sendMessage";
+    const url = `${TELEGRAM_API_URL}/sendMessage`;
+
     const data = {
         chat_id: chatId,
-        text: text,
+        text: text.slice(0, 4000), // безопасность
         parse_mode: parseMode
     };
 
     try {
-        const fetch = require("node-fetch");
         const response = await fetch(url, {
             method: "POST",
             headers: { "Content-Type": "application/json" },
@@ -75,68 +72,116 @@ async function sendMessage(chatId, text, parseMode = "HTML") {
 
         const result = await response.json();
         if (!result.ok) {
-            console.error("Ошибка отправки:", result);
+            console.error("❌ Ошибка отправки в Telegram:", result);
         }
+
         return result;
     } catch (error) {
-        console.error("Ошибка сообщения:", error);
+        console.error("❌ Ошибка отправки сообщения:", error);
     }
 }
 
+/**
+ * Команда /start
+ */
 async function handleStartCommand(chatId, firstName) {
-    const welcomeMessage = "🤖 Привет, " + firstName + "!\n\nЯ умный туристический бот с AI и готов помочь вам спланировать идеальное путешествие!\n\n🎯 Что я умею:\n• Подбираю туры по любым странам\n• Даю персональные советы по путешествиям\n• Помогаю с планированием маршрутов\n• Отвечаю на вопросы о визах, погоде, достопримечательностях\n\n💬 Просто напишите мне куда хотите поехать или задайте любой вопрос о путешествиях!\n\nКоманды: /start /help";
+    const welcomeMessage = `🤖 Привет, ${firstName}!
 
+Я умный туристический бот с AI и готов помочь вам спланировать идеальное путешествие!
+
+🎯 Что я умею:
+• Подбираю туры по странам
+• Даю советы по отдыху
+• Помогаю с маршрутом
+• Рассказываю о визах, погоде и достопримечательностях
+
+💬 Просто напиши, куда хочешь поехать, или задай вопрос!
+
+Команды: /start /help`;
     await sendMessage(chatId, welcomeMessage);
 }
 
+/**
+ * Команда /help
+ */
 async function handleHelpCommand(chatId) {
-    const helpMessage = "📚 Справка по боту\n\n🤖 Я использую искусственный интеллект для персональных ответов!\n\n💡 Примеры вопросов:\n• \"Хочу поехать в Японию весной\"\n• \"Посоветуй недорогой отдых на море\"\n• \"Какие документы нужны для Таиланда?\"\n• \"Лучшие места в Европе для романтической поездки\"\n\n✨ Чем детальнее ваш вопрос, тем точнее мой ответ!\n\nКоманды:\n/start - Главное меню\n/help - Эта справка";
+    const helpMessage = `📚 Справка
+
+Примеры вопросов:
+• "Хочу в Японию весной"
+• "Посоветуй недорогой отдых на море"
+• "Какие документы нужны для Таиланда?"
+• "Лучшие места в Европе для пары"
+
+Чем детальнее вопрос — тем точнее ответ.
+
+Команды:
+/start — Главное меню
+/help — Эта справка`;
 
     await sendMessage(chatId, helpMessage);
 }
 
+/**
+ * Обработка обычного текста
+ */
 async function handleTextMessage(chatId, text, firstName) {
-    // Показываем что думаем
     await sendMessage(chatId, "🤔 Думаю...");
-    
-    // Пытаемся получить ответ от AI
-    const aiResponse = await getAIResponse(text, firstName);
-    
-    if (aiResponse) {
-        // Отправляем AI ответ
-        await sendMessage(chatId, "🧠 " + aiResponse);
-    } else {
-        // Fallback к простым ответам
-        const textLower = text.toLowerCase();
-        
-        if (textLower.includes("vietnam") || textLower.includes("вьетнам") || textLower.includes("вьетнаме")) {
-            await sendMessage(chatId, "🇻🇳 Вьетнам - отличный выбор!\n\n🏖️ Популярные направления:\n• Нячанг - красивые пляжи и дайвинг\n• Фукуок - тропический остров\n• Муйне - кайтсерфинг и песчаные дюны\n• Ханой - столица с богатой историей\n• Хошимин - современный мегаполис\n\n🌤️ Лучшее время: Ноябрь-Март\n💰 Бюджет: от 800$ на неделю\n\nЧто именно вас интересует во Вьетнаме?");
-        } else {
-            const responses = [
-                "Привет, " + firstName + "! Расскажите подробнее о ваших планах путешествия - я помогу с выбором!",
-                "Интересно! Какой тип отдыха вы предпочитаете? Пляжный, экскурсионный, активный?",
-                "Получил ваш запрос! Уточните пожалуйста бюджет и предпочтения по климату.",
-                firstName + ", я готов помочь! В какое время года планируете поездку?",
-                "Отличный вопрос! Давайте подберем что-то идеальное для вас."
-            ];
 
-            const randomResponse = responses[Math.floor(Math.random() * responses.length)];
-            await sendMessage(chatId, randomResponse);
+    try {
+        const aiResponse = await getAIResponse(text, firstName);
+
+        if (aiResponse) {
+            await sendMessage(chatId, "🧠 " + aiResponse);
+        } else {
+            const textLower = text.toLowerCase();
+
+            if (textLower.includes("вьетнам")) {
+                await sendMessage(chatId, `🇻🇳 Вьетнам — отличный выбор!
+
+🏖️ Популярные направления:
+• Нячанг — пляжи и дайвинг
+• Фукуок — остров и природа
+• Муйне — дюны и кайтсерфинг
+• Ханой — история и культура
+• Хошимин — мегаполис и еда
+
+🌤️ Сезон: ноябрь–март
+💰 Бюджет: от $800 на неделю
+
+Что именно интересует?`);
+            } else {
+                const fallbackReplies = [
+                    `Привет, ${firstName}! Расскажите подробнее — я помогу!`,
+                    "Интересно! Какой отдых вы хотите — пляж, экскурсии, приключения?",
+                    "Уточните бюджет и климат — и я предложу лучшие идеи!",
+                    `${firstName}, когда планируете поездку? Подберу вариант!`,
+                    "Хороший запрос! Сейчас найдем вам классное направление!"
+                ];
+                const randomResponse = fallbackReplies[Math.floor(Math.random() * fallbackReplies.length)];
+                await sendMessage(chatId, randomResponse);
+            }
         }
+    } catch (e) {
+        console.error("❌ Ошибка при ответе:", e);
+        await sendMessage(chatId, "😓 Произошла ошибка при обработке запроса. Попробуйте ещё раз.");
     }
 }
 
+/**
+ * Обработка обновления от Telegram
+ */
 async function processUpdate(update) {
     if (!update.message) return;
 
     const message = update.message;
     const chatId = message.chat.id;
     const text = message.text;
-    const firstName = message.from.first_name || "Друг";
+    const firstName = message.from?.first_name || "Друг";
 
-    console.log("Сообщение от " + firstName + " (ID: " + chatId + "): " + text);
+    console.log(`📩 Сообщение от ${firstName} (${chatId}): ${text}`);
 
-    if (text && text.startsWith("/")) {
+    if (text?.startsWith("/")) {
         const command = text.split(" ")[0].toLowerCase();
 
         switch (command) {
@@ -147,65 +192,37 @@ async function processUpdate(update) {
                 await handleHelpCommand(chatId);
                 break;
             default:
-                await sendMessage(chatId, "❓ Неизвестная команда: " + command + "\n\n📱 Используйте /help для списка команд или просто напишите ваш вопрос о путешествиях!");
+                await sendMessage(chatId, `❓ Неизвестная команда: ${command}\n\n📱 Используйте /help или задайте вопрос.`);
         }
-    } else if (text) {
+    } else {
         await handleTextMessage(chatId, text, firstName);
     }
 }
 
-async function getUpdates() {
-    const url = TELEGRAM_API_URL + "/getUpdates?offset=" + (lastUpdateId + 1) + "&timeout=30";
+/**
+ * Webhook endpoint
+ */
+app.post("/webhook", async (req, res) => {
+    console.log("📥 Webhook получен:", JSON.stringify(req.body, null, 2));
+    await processUpdate(req.body);
+    res.sendStatus(200);
+});
 
-    try {
-        const fetch = require("node-fetch");
-        const response = await fetch(url);
-        const data = await response.json();
-
-        if (data.ok && data.result.length > 0) {
-            for (const update of data.result) {
-                await processUpdate(update);
-                lastUpdateId = update.update_id;
-            }
-        }
-    } catch (error) {
-        console.error("Ошибка обновления:", error);
-    }
-}
-
-async function startPolling() {
-    console.log("🤖 Туристический AI-бот запущен! Начинаем опрос...");
-    console.log("✅ Deepseek AI подключен");
-
-    while (true) {
-        try {
-            await getUpdates();
-        } catch (error) {
-            console.error("Ошибка основного цикла:", error);
-            await new Promise(resolve => setTimeout(resolve, 5000));
-        }
-
-        await new Promise(resolve => setTimeout(resolve, 1000));
-    }
-}
-
+/**
+ * Проверка статуса
+ */
 app.get("/", (req, res) => {
     res.json({
-        status: "ОК",
-        message: "🤖 Туристический AI-бот работает!",
-        deepseek_enabled: true,
+        status: "✅ OK",
+        message: "🤖 Туристический AI-бот работает",
         uptime: process.uptime()
     });
 });
 
-app.post("/webhook", async (req, res) => {
-    const update = req.body;
-    await processUpdate(update);
-    res.sendStatus(200);
-});
-
+/**
+ * Запуск сервера
+ */
 app.listen(PORT, () => {
-    console.log("🚀 Сервер запущен на порту " + PORT);
-    startPolling();
+    console.log(`🚀 Сервер запущен на порту ${PORT}`);
+    console.log("📡 Webhook endpoint: /webhook");
 });
-```
