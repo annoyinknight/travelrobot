@@ -1,78 +1,135 @@
-const userContexts = {}; // ключ — chatId
+const express = require("express");
+const app = express();
 
-const QUESTIONS = [
-    { key: "destination", text: "Куда хочешь поехать? Можно просто страну или регион." },
-    { key: "dates", text: "Когда примерно планируешь отпуск?" },
-    { key: "travelers", text: "С кем путешествуешь — один, с друзьями, семьей?" },
-    { key: "vacation_type", text: "Что предпочитаешь — пляж, экскурсии, активный отдых?" },
-    { key: "budget", text: "Какой у тебя примерный бюджет на поездку?" }
-];
-
-function getNextQuestion(context) {
-    for (const q of QUESTIONS) {
-        if (!context[q.key]) return q;
-    }
-    return null;
+if (!process.env.TELEGRAM_BOT_TOKEN) {
+    console.error("ERROR: NEED TELEGRAM_BOT_TOKEN");
+    process.exit(1);
 }
 
-function extractValue(key, text) {
-    const low = text.toLowerCase();
-    if (key === "destination") {
-        if (/вьетнам|турция|тайланд|египет/.test(low)) return low;
-    }
-    if (key === "dates") {
-        if (/июн|июл|авг|сент|окт/.test(low)) return text;
-    }
-    if (key === "travelers") {
-        if (/один|одна|сам/.test(low)) return "1 взрослый";
-        if (/вдвоем|вдвоём|жена|муж|пара/.test(low)) return "2 взрослых";
-        if (/семь|ребен|дети/.test(low)) return "семья";
-    }
-    if (key === "budget") {
-        const match = text.match(/\d{5,6}/);
-        if (match) return match[0];
-    }
-    if (key === "vacation_type") {
-        if (/пляж|море/.test(low)) return "пляжный";
-        if (/экскурс|музей|город/.test(low)) return "экскурсионный";
-        if (/гор|трекинг|приключ/.test(low)) return "активный";
-    }
-    return null;
+if (!process.env.DEEPSEEK_API_KEY) {
+    console.error("ERROR: NEED DEEPSEEK_API_KEY");
+    process.exit(1);
 }
 
-async function handleUserMessage(chatId, text) {
-    if (!userContexts[chatId]) userContexts[chatId] = {};
-    const context = userContexts[chatId];
+const PORT = process.env.PORT || 3000;
+const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
+const TELEGRAM_API_URL = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN;
+const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
 
-    const nextQuestion = getNextQuestion(context);
+function isValidMessage(update) {
+    return update && update.message && update.message.text && update.message.chat;
+}
 
-    if (nextQuestion) {
-        const extracted = extractValue(nextQuestion.key, text);
-        if (extracted) {
-            context[nextQuestion.key] = extracted;
-            const next = getNextQuestion(context);
-            if (next) {
-                await sendMessage(chatId, next.text);
-            } else {
-                await sendMessage(chatId, "Спасибо, всё записал. Сейчас посмотрим, что можно предложить... ⛱");
-                const summary = Object.entries(context).map(([k, v]) => `${k}: ${v}`).join("\n");
-                const aiResponse = await getAIResponse(`Вот параметры поездки:\n${summary}\nПредложи варианты и советы.`);
-                await sendMessage(chatId, aiResponse);
+async function sendMessage(chatId, text) {
+    if (!text || text.length === 0) return;
+    if (text.length > 4096) text = text.substring(0, 4090) + "\n[...text cut]";
+
+    try {
+        const response = await fetch(TELEGRAM_API_URL + "/sendMessage", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ chat_id: chatId, text }),
+        });
+        const data = await response.json();
+        if (!response.ok) throw new Error("Telegram API error: " + data.description);
+        console.log("Message sent to: " + chatId);
+    } catch (error) {
+        console.error("Send message error:", error.message);
+    }
+}
+
+async function getAIResponse(userMessage) {
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 20000);
+
+    try {
+        const response = await fetch("https://api.deepseek.com/v1/chat/completions", {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": "Bearer " + DEEPSEEK_API_KEY },
+            body: JSON.stringify({
+                model: "deepseek-chat",
+                messages: [
+                    { role: "system", content: "You are a friendly travel assistant. Respond in Russian." },
+                    { role: "user", content: userMessage }
+                ],
+                max_tokens: 1500, temperature: 0.7
+            }),
+            signal: controller.signal
+        });
+        clearTimeout(timeout);
+        const data = await response.json();
+        if (!response.ok) throw new Error("DeepSeek API error: " + JSON.stringify(data));
+        const result = data.choices?.[0]?.message?.content;
+        if (!result) throw new Error("Invalid DeepSeek response");
+        return result;
+    } catch (error) {
+        if (error.name === "AbortError") return "Sorry, request took too long. Try again.";
+        console.error("DeepSeek error:", error.message);
+        return "Sorry, I encountered an error. Please try again.";
+    }
+}
+
+async function getUpdates(offset) {
+    try {
+        const response = await fetch(TELEGRAM_API_URL + "/getUpdates?offset=" + offset + "&timeout=10");
+        const data = await response.json();
+        if (!response.ok) throw new Error("Get updates error: " + JSON.stringify(data));
+        return data.result || [];
+    } catch (error) {
+        console.error("Get updates error:", error.message);
+        return [];
+    }
+}
+
+(async () => {
+    let offset = 0;
+    console.log("Bot starting...");
+    console.log("Bot is listening for messages...");
+
+    while (true) {
+        try {
+            const updates = await getUpdates(offset);
+            for (const update of updates) {
+                if (!isValidMessage(update)) {
+                    offset = update.update_id + 1;
+                    continue;
+                }
+                const message = update.message;
+                const chatId = message.chat.id;
+                const text = message.text;
+                console.log("New message from " + chatId + ": " + text);
+                try {
+                    await fetch(TELEGRAM_API_URL + "/sendChatAction", {
+                        method: "POST",
+                        headers: { "Content-Type": "application/json" },
+                        body: JSON.stringify({ chat_id: chatId, action: "typing" })
+                    });
+                } catch (e) {}
+                try {
+                    const aiResponse = await getAIResponse(text);
+                    await sendMessage(chatId, aiResponse);
+                } catch (error) {
+                    console.error("Message handling error:", error);
+                    await sendMessage(chatId, "Sorry, error occurred.");
+                }
+                offset = update.update_id + 1;
             }
-        } else {
-            // Пользователь не дал точный ответ, просто задаем следующий вопрос
-            await sendMessage(chatId, nextQuestion.text);
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+        } catch (error) {
+            console.error("Main loop error:", error);
+            await new Promise((resolve) => setTimeout(resolve, 5000));
         }
-    } else {
-        // Повторный пользователь или всё уже собрано — отправим в ИИ напрямую
-        const aiResponse = await getAIResponse(text);
-        await sendMessage(chatId, aiResponse);
     }
-}
+})();
 
-// В основном цикле ЗАМЕНИ строку:
-// const aiResponse = await getAIResponse(text);
-// await sendMessage(chatId, aiResponse);
+app.get("/", (req, res) => {
+    res.json({ status: "running", message: "Telegram bot working!", time: new Date() });
+});
 
-// НА:
-await handleUserMessage(chatId, text);
+app.get("/health", (req, res) => {
+    res.json({ status: "healthy", uptime: process.uptime(), memory: process.memoryUsage() });
+});
+
+app.listen(PORT, () => {
+    console.log("Server started on port " + PORT);
+});
