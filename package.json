@@ -1,20 +1,20 @@
 {
   "name": "telegram-travel-bot",
   "version": "1.0.0",
-  "description": "Telegram bot for travel recommendations",
+  "description": "Telegram bot for travel recommendations with TripAdvisor integration",
   "main": "index.js",
   "scripts": {
     "start": "node index.js",
-    "dev": "node index.js"
+    "dev": "node index.js",
+    "test": "node -e \"console.log('Testing bot startup...'); require('./index.js');\""
   },
   "dependencies": {
-    "express": "^4.18.2",
-    "node-fetch": "^2.6.7"
+    "express": "^4.18.2"
   },
   "engines": {
-    "node": ">=14"
+    "node": ">=18"
   },
-  "keywords": ["telegram", "bot", "travel", "nodejs"],
+  "keywords": ["telegram", "bot", "travel", "nodejs", "tripadvisor"],
   "author": "Travel Bot",
   "license": "MIT"
 }
