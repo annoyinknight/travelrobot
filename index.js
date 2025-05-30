@@ -1,6 +1,9 @@
 const express = require("express");
 const app = express();
 
+// Middleware для парсинга JSON
+app.use(express.json());
+
 if (!process.env.TELEGRAM_BOT_TOKEN) {
     console.error("ERROR: NEED TELEGRAM_BOT_TOKEN");
     process.exit(1);
@@ -15,6 +18,7 @@ const PORT = process.env.PORT || 3000;
 const TELEGRAM_BOT_TOKEN = process.env.TELEGRAM_BOT_TOKEN;
 const TELEGRAM_API_URL = "https://api.telegram.org/bot" + TELEGRAM_BOT_TOKEN;
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY;
+const WEBHOOK_URL = process.env.WEBHOOK_URL || "https://your-app.onrender.com"; // Замените на ваш URL
 
 function isValidMessage(update) {
     return update && update.message && update.message.text && update.message.chat;
@@ -69,58 +73,66 @@ async function getAIResponse(userMessage) {
     }
 }
 
-async function getUpdates(offset) {
+// Функция для установки webhook
+async function setWebhook() {
     try {
-        const response = await fetch(TELEGRAM_API_URL + "/getUpdates?offset=" + offset + "&timeout=10");
+        const webhookUrl = WEBHOOK_URL + "/webhook";
+        const response = await fetch(TELEGRAM_API_URL + "/setWebhook", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ url: webhookUrl }),
+        });
         const data = await response.json();
-        if (!response.ok) throw new Error("Get updates error: " + JSON.stringify(data));
-        return data.result || [];
+        if (data.ok) {
+            console.log("✅ Webhook set successfully:", webhookUrl);
+        } else {
+            console.error("❌ Failed to set webhook:", data.description);
+        }
     } catch (error) {
-        console.error("Get updates error:", error.message);
-        return [];
+        console.error("❌ Webhook setup error:", error.message);
     }
 }
 
-(async () => {
-    let offset = 0;
-    console.log("Bot starting...");
-    console.log("Bot is listening for messages...");
+// Webhook endpoint для получения сообщений от Telegram
+app.post("/webhook", async (req, res) => {
+    try {
+        const update = req.body;
+        console.log("Received update:", JSON.stringify(update, null, 2));
 
-    while (true) {
-        try {
-            const updates = await getUpdates(offset);
-            for (const update of updates) {
-                if (!isValidMessage(update)) {
-                    offset = update.update_id + 1;
-                    continue;
-                }
-                const message = update.message;
-                const chatId = message.chat.id;
-                const text = message.text;
-                console.log("New message from " + chatId + ": " + text);
-                try {
-                    await fetch(TELEGRAM_API_URL + "/sendChatAction", {
-                        method: "POST",
-                        headers: { "Content-Type": "application/json" },
-                        body: JSON.stringify({ chat_id: chatId, action: "typing" })
-                    });
-                } catch (e) {}
-                try {
-                    const aiResponse = await getAIResponse(text);
-                    await sendMessage(chatId, aiResponse);
-                } catch (error) {
-                    console.error("Message handling error:", error);
-                    await sendMessage(chatId, "Sorry, error occurred.");
-                }
-                offset = update.update_id + 1;
-            }
-            await new Promise((resolve) => setTimeout(resolve, 1000));
-        } catch (error) {
-            console.error("Main loop error:", error);
-            await new Promise((resolve) => setTimeout(resolve, 5000));
+        if (!isValidMessage(update)) {
+            return res.status(200).json({ ok: true });
         }
+
+        const message = update.message;
+        const chatId = message.chat.id;
+        const text = message.text;
+
+        console.log("New message from " + chatId + ": " + text);
+
+        // Отправляем "typing" индикатор
+        try {
+            await fetch(TELEGRAM_API_URL + "/sendChatAction", {
+                method: "POST",
+                headers: { "Content-Type": "application/json" },
+                body: JSON.stringify({ chat_id: chatId, action: "typing" })
+            });
+        } catch (e) {}
+
+        // Получаем ответ от AI и отправляем пользователю
+        try {
+            const aiResponse = await getAIResponse(text);
+            await sendMessage(chatId, aiResponse);
+        } catch (error) {
+            console.error("Message handling error:", error);
+            await sendMessage(chatId, "Sorry, error occurred.");
+        }
+
+        res.status(200).json({ ok: true });
+    } catch (error) {
+        console.error("Webhook error:", error);
+        res.status(500).json({ error: error.message });
     }
-})();
+});
 
 app.get("/", (req, res) => {
     res.json({ status: "running", message: "Telegram bot working!", time: new Date() });
@@ -130,6 +142,22 @@ app.get("/health", (req, res) => {
     res.json({ status: "healthy", uptime: process.uptime(), memory: process.memoryUsage() });
 });
 
+// Endpoint рля проверки и настройки webhook
+app.get("/setup-webhook", async (req, res) => {
+    await setWebhook();
+    res.json({ message: "Webhook setup initiated" });
+});
+
 app.listen(PORT, () => {
     console.log("Server started on port " + PORT);
+    console.log("🤔 Bot is ready to receive messages via webhook");
+
+    // Автоматически устанавливаем webhook при запуске
+    if (WEBHOOK_URL !== "https://your-app.onrender.com") {
+        setTimeout(() => {
+            setWebhook();
+        }, 2000);
+    } else {
+        console.log("⚠️ Please set WEBHOOK_URL environment variable");
+    }
 });
